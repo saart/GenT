@@ -1,6 +1,6 @@
 # Gen-T
 
-Gen-T is a cutting-edge system designed to address the challenges of distributed tracing (DT) in microservice architectures by leveraging deep generative compression techniques. 
+Gen-T is a system designed to reduce the triage cost of distributed tracing (DT) in microservice architectures by leveraging deep generative compression techniques. 
 This repository includes the source code, test cases, and supplementary data for our paper.
 
 ## Table of Contents
