@@ -8,7 +8,10 @@ This repository includes the source code, test cases, and supplementary data for
 - [Introduction](#introduction)
 - [Repository Structure](#repository-structure)
 - [Getting Started](#getting-started)
-- [Usage](#usage)
+- [Use in Production](#use-in-production)
+- [Replicate Experiments from the Paper](#replicate-experiments-from-the-paper)
+  - [Demo Application Experiments](#demo-application-experiments)
+  - [PandoraTrace Benchmark](#pandoratrace-benchmark)
 - [Contributing](#contributing)
 - [License](#license)
 - [References](#references)
@@ -72,88 +75,7 @@ GenT/
     pip install -r src/requirements.txt
     ```
 
-## Usage
-
-### Downloading Traces from Jaeger
-
-If you need to download traces from the Jaeger API, you can use the provided utility:
-
-```python
-from pandora_trace.jaeger_to_gent import download_traces_from_jaeger_for_all_services
-
-download_traces_from_jaeger_for_all_services(target_dir=f"abs/path/to/otel/traces", jaeger_url="http://localhost:16686")
-```
-
-### Translating Jaeger Traces to GenT Format
-Before running the GenTDriver on a directory containing raw OTEL spans, you need to parse them into a format that GenT can process using the following utility:
-```python
-from pandora_trace.jaeger_to_gent import translate_jaeger_to_gent
-
-translate_jaeger_to_gent(from_dir=f"abs/path/to/otel/traces", to_dir=f"abs/target/path/to/gent/traces")
-```
-
-### Running the Training and Generation Process
-To run the training and generation process, you can use the following script:
-
-```python
-from drivers.gent.gent_driver import GenTDriver
-
-# Configure the GenTDriver with the desired configuration
-config = GenTConfig(chain_length=2, iterations=3, tx_end=10000 + i, traces_dir="path/to/traces_dir")
-
-# Initialize the driver
-driver = GenTDriver(config)
-
-# Train the model and generate traces
-driver.train_and_generate()
-```
-
-#### Parameters
-* chain_length: Length of the chain as described in the paper.
-* iterations: Number of iterations for training.
-* tx_end: number of traces to use for training.
-* traces_dir: Directory where trace data is stored.
-
-Ensure that you update the traces_dir with the appropriate path to your trace data directory.
-
-
-
-# PandoraTrace Benchmark
-
-PandoraTrace is a benchmark designed to create tracing data from various applications and different error types.
-
-## Structure
-
-Users of PandoraTrace can programmatically produce (and probe) traces that exhibit incidents by specifying four key components: Applications, Request Patterns, Incident Types, and Queries.
-
-* **Applications**: We used the microservices applications from the DeathStarBench suite: socialNetwork, hotelReservation, and mediaMicroservices.
-* **Request Patterns**: To simulate realistic and diverse traffic patterns, we utilized RESTler, a stateful REST API fuzzer. RESTler generates a broad spectrum of trace request patterns with varying properties, effectively mimicking the unpredictable nature of real user interactions with these services.
-* **Incident Types**: We generated traces simulating 10 specific incidents, ranging from induced delays to internal errors in third-party services. These incidents are induced in the running application using various tools, such as the “stress” apt package to simulate CPU and memory bottlenecks, and “iproute2” for introducing network delays.
-* **Queries**: We use a set of 10 queries derived from TraceQL, Jaeger, and PromQL.
-
-## Using the Benchmark
-
-Using this benchmark involves two main steps:
-1. Creating the raw traces. Each created directory holds traces for a single DeathStarBench application and an error.
-2. Comparing raw traces to synthetic traces. We assume that these traces are provided as two SQL tables. Our output is a single number: the average Wasserstein distance across all the generated queries.
-
-### Creating Raw Traces
-
-* `run_benchmark.create_baseline`: Creates a set of traces of a specific application without any incidents.
-* `run_benchmark.main`:
-  * Runs each DeathStarBench application.
-  * Adds an incident.
-  * Creates traffic using RESTler (based on the Swagger docs).
-  * Downloads the Jaeger traces and translates them into GenT format.
-  * Merges the erroneous traces with the baseline (benign) data using a distribution derived from an exponential random variable.
-
-### Comparing Results
-
-The API function `run_template` takes a dictionary that maps attributes to values and a list of SQL queries parameterized by these attributes, additionally it takes the name of two SQL tables and a DB cursor. It formats the queries using the given attributes, runs the resulting queries on the input tables, and compares the queries results using the Wasserstein distance. It returns the average distance.
-
-
-
-# Use in production
+## Use in production
 
 To use Gen-T in production, you need to incorporate two main components:
 
@@ -184,6 +106,89 @@ As discussed in the paper, GenTConfig is highly configurable and offers differen
 
 Note: This repository represents ongoing academic research. Please take the necessary precautions when using it in production environments. Use at your own risk.
 
+## Replicate Experiments from the Paper
+
+The paper runs experiments in two settings. The first uses existing Jaeger traces from demo applications (we used HotROD and WildRydes). The second generates new traces with PandoraTrace, a new observability benchmark suite that we developed to provide the research community greater granularity and control in evaluating incidents in microservice environments.
+
+### Demo Application Experiments
+
+#### Downloading Traces from Jaeger
+
+If you need to download traces from the Jaeger API, you can use the provided utility:
+
+```python
+from pandora_trace.jaeger_to_gent import download_traces_from_jaeger_for_all_services
+
+download_traces_from_jaeger_for_all_services(target_dir=f"abs/path/to/otel/traces", jaeger_url="http://localhost:16686")
+```
+
+#### Translating Jaeger Traces to GenT Format
+Before running the GenTDriver on a directory containing raw OTEL spans, you need to parse them into a format that GenT can process using the following utility:
+```python
+from pandora_trace.jaeger_to_gent import translate_jaeger_to_gent
+
+translate_jaeger_to_gent(from_dir=f"abs/path/to/otel/traces", to_dir=f"abs/target/path/to/gent/traces")
+```
+
+#### Running the Training and Generation Process
+To run the training and generation process, you can use the following script:
+
+```python
+from drivers.gent.gent_driver import GenTDriver
+
+# Configure the GenTDriver with the desired configuration
+config = GenTConfig(chain_length=2, iterations=3, tx_end=10000 + i, traces_dir="path/to/traces_dir")
+
+# Initialize the driver
+driver = GenTDriver(config)
+
+# Train the model and generate traces
+driver.train_and_generate()
+```
+
+##### Parameters
+* chain_length: Length of the chain as described in the paper.
+* iterations: Number of iterations for training.
+* tx_end: number of traces to use for training.
+* traces_dir: Directory where trace data is stored.
+
+Ensure that you update the traces_dir with the appropriate path to your trace data directory.
+
+
+
+## PandoraTrace Benchmark
+
+PandoraTrace is a benchmark designed to create tracing data from various applications and different error types.
+
+### Structure
+
+Users of PandoraTrace can programmatically produce (and probe) traces that exhibit incidents by specifying four key components: Applications, Request Patterns, Incident Types, and Queries.
+
+* **Applications**: We used the microservices applications from the DeathStarBench suite: socialNetwork, hotelReservation, and mediaMicroservices.
+* **Request Patterns**: To simulate realistic and diverse traffic patterns, we utilized RESTler, a stateful REST API fuzzer. RESTler generates a broad spectrum of trace request patterns with varying properties, effectively mimicking the unpredictable nature of real user interactions with these services.
+* **Incident Types**: We generated traces simulating 10 specific incidents, ranging from induced delays to internal errors in third-party services. These incidents are induced in the running application using various tools, such as the “stress” apt package to simulate CPU and memory bottlenecks, and “iproute2” for introducing network delays.
+* **Queries**: We use a set of 10 queries derived from TraceQL, Jaeger, and PromQL.
+
+### Using the Benchmark
+
+Using this benchmark involves two main steps:
+1. Creating the raw traces. Each created directory holds traces for a single DeathStarBench application and an error.
+2. Comparing raw traces to synthetic traces. We assume that these traces are provided as two SQL tables. Our output is a single number: the average Wasserstein distance across all the generated queries.
+
+#### Creating Raw Traces
+
+* `run_benchmark.create_baseline`: Creates a set of traces of a specific application without any incidents.
+* `run_benchmark.main`:
+  * Runs each DeathStarBench application.
+  * Adds an incident.
+  * Creates traffic using RESTler (based on the Swagger docs).
+  * Downloads the Jaeger traces and translates them into GenT format.
+  * Merges the erroneous traces with the baseline (benign) data using a distribution derived from an exponential random variable.
+
+#### Comparing Results
+
+The API function `run_template` takes a dictionary that maps attributes to values and a list of SQL queries parameterized by these attributes, additionally it takes the name of two SQL tables and a DB cursor. It formats the queries using the given attributes, runs the resulting queries on the input tables, and compares the queries results using the Wasserstein distance. It returns the average distance.
+
 
 ## Contributing
 
@@ -201,3 +206,13 @@ We welcome contributions to Gen-T! Please fork the repository and submit pull re
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
+## References
+
+If you use this code in a publication, please cite the following work: 
+
+@inproceedings{tochner2023gen,\
+    title={Gen-T: Reduce Distributed Tracing Operational Costs Using Generative Models},\  
+    author={Tochner, Saar and Fanti, Giulia and Sekar, Vyas},\
+    booktitle={Temporal Graph Learning Workshop@ NeurIPS 2023},\
+    year={2023}\
+}
