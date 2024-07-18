@@ -1,6 +1,6 @@
 # Gen-T
 
-Gen-T is a cutting-edge system designed to address the challenges of distributed tracing (DT) in microservice architectures by leveraging deep generative compression techniques. 
+Gen-T is a system designed to reduce the triage cost of distributed tracing (DT) in microservice architectures by leveraging deep generative compression techniques.
 This repository includes the source code, test cases, and supplementary data for our paper.
 
 ## Table of Contents
@@ -34,6 +34,7 @@ GenT/
 │ ├── ml/ # Machine learning models and utilities
 │ ├── gent_utils/ # Utility functions and constants for GenT
 │ ├── paper/ # Supplementary materials related to the paper itself (e.g. figures, baselines)
+│ ├── pandora_trace/ # Our framework to create tracing data from various applications and different error types
 │ ├── requirements.txt # Python dependencies
 ├── tests/
 │ ├── collector/ # Test cases for collector components
@@ -78,7 +79,7 @@ GenT/
 If you need to download traces from the Jaeger API, you can use the provided utility:
 
 ```python
-from paper.benchmark.download_from_jaeger import download_traces_from_jaeger_for_all_services
+from pandora_trace.jaeger_to_gent import download_traces_from_jaeger_for_all_services
 
 download_traces_from_jaeger_for_all_services(target_dir=f"abs/path/to/otel/traces", jaeger_url="http://localhost:16686")
 ```
@@ -86,7 +87,7 @@ download_traces_from_jaeger_for_all_services(target_dir=f"abs/path/to/otel/trace
 ### Translating Jaeger Traces to GenT Format
 Before running the GenTDriver on a directory containing raw OTEL spans, you need to parse them into a format that GenT can process using the following utility:
 ```python
-from paper.benchmark.download_from_jaeger import translate_jaeger_to_gent
+from pandora_trace.jaeger_to_gent import translate_jaeger_to_gent
 
 translate_jaeger_to_gent(from_dir=f"abs/path/to/otel/traces", to_dir=f"abs/target/path/to/gent/traces")
 ```
@@ -114,6 +115,74 @@ driver.train_and_generate()
 * traces_dir: Directory where trace data is stored.
 
 Ensure that you update the traces_dir with the appropriate path to your trace data directory.
+
+
+
+# PandoraTrace Benchmark
+
+PandoraTrace is a benchmark designed to create tracing data from various applications and different error types.
+
+## Structure
+
+Users of PandoraTrace can programmatically produce (and probe) traces that exhibit incidents by specifying four key components: Applications, Request Patterns, Incident Types, and Queries.
+
+* **Applications**: We used the microservices applications from the DeathStarBench suite: socialNetwork, hotelReservation, and mediaMicroservices.
+* **Request Patterns**: To simulate realistic and diverse traffic patterns, we utilized RESTler, a stateful REST API fuzzer. RESTler generates a broad spectrum of trace request patterns with varying properties, effectively mimicking the unpredictable nature of real user interactions with these services.
+* **Incident Types**: We generated traces simulating 10 specific incidents, ranging from induced delays to internal errors in third-party services. These incidents are induced in the running application using various tools, such as the “stress” apt package to simulate CPU and memory bottlenecks, and “iproute2” for introducing network delays.
+* **Queries**: We use a set of 10 queries derived from TraceQL, Jaeger, and PromQL.
+
+## Using the Benchmark
+
+Using this benchmark involves two main steps:
+1. Creating the raw traces. Each created directory holds traces for a single DeathStarBench application and an error.
+2. Comparing raw traces to synthetic traces. We assume that these traces are provided as two SQL tables. Our output is a single number: the average Wasserstein distance across all the generated queries.
+
+### Creating Raw Traces
+
+* `run_benchmark.create_baseline`: Creates a set of traces of a specific application without any incidents.
+* `run_benchmark.main`:
+  * Runs each DeathStarBench application.
+  * Adds an incident.
+  * Creates traffic using RESTler (based on the Swagger docs).
+  * Downloads the Jaeger traces and translates them into GenT format.
+  * Merges the erroneous traces with the baseline (benign) data using a distribution derived from an exponential random variable.
+
+### Comparing Results
+
+The API function `run_template` takes a dictionary that maps attributes to values and a list of SQL queries parameterized by these attributes, additionally it takes the name of two SQL tables and a DB cursor. It formats the queries using the given attributes, runs the resulting queries on the input tables, and compares the queries results using the Wasserstein distance. It returns the average distance.
+
+
+
+# Use in production
+
+To use Gen-T in production, you need to incorporate two main components:
+
+1. **Compression Mechanism at the Collector**: This component batches the incoming spans. We recommend using a batch size of around 10,000 traces. Given a batch of OTEL traces, create a compressed model using the following steps:
+```python
+from drivers.gent.gent_driver import GenTDriver
+from pandora_trace.jaeger_to_gent import translate_jaeger_to_gent
+
+# preprocess the OTEL traces into GenT format
+translate_jaeger_to_gent(from_dir=f"abs/path/to/otel/traces", to_dir=f"abs/target/path/to/gent/traces")
+
+# Initialize the driver and train the model
+driver = GenTDriver(GenTConfig(traces_dir="abs/target/path/to/gent/traces"))
+driver.train()  # note: it takes a while to train the model
+
+to_send = driver.get_model_gzip_file()  # returns the path to GenT model
+```
+2. **Decompression Mechanism at the Backend**: This component generates synthetic traces from the model. Given a compressed model, create a GenTDriver and generate traces using the following steps:
+```python
+from drivers.gent.gent_driver import GenTDriver
+
+driver = GenTDriver(GenTConfig(traces_dir="abs/target/path/to/gent/traces"))
+driver.load_model_gzip_file("path/to/GenT/model.zip")
+driver.generate()  # note: it takes a while to train the model
+# the generated traces will be stored in the traces_dir
+```
+As discussed in the paper, GenTConfig is highly configurable and offers different trade-offs to better fit the target application. Ensure you use the same parameters in both the compression and decompression processes.
+
+Note: This repository represents ongoing academic research. Please take the necessary precautions when using it in production environments. Use at your own risk.
 
 
 ## Contributing

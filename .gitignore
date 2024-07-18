@@ -144,7 +144,7 @@ dmypy.json
 *.pdf
 /src/paper/adaption_exp/
 /src/paper/spans.db
-/src/paper/benchmark/data/
+/src/pandora_trace/data/
 /src/paper/results.json
 /src/paper/spans_deathstar.db
 /tests/test_data/app.json

@@ -11,7 +11,7 @@ from typing import Set, NamedTuple, List, Literal
 import docker
 from docker.models.containers import Container
 
-from paper.benchmark.download_from_jaeger import (download_traces_from_jaeger_for_all_services,
+from src.pandora_trace.jaeger_to_gent import (download_traces_from_jaeger_for_all_services,
                                                   translate_jaeger_to_gent,
                                                   translate_jaeger_to_gent_from_list)
 

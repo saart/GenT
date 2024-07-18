@@ -23,8 +23,9 @@ from gent_utils.constants import TRACES_DIR
 from paper.adaption_experiment import NON_ROLLING_PATH, ROLLING_PATH
 from drivers.gent.data import get_all_txs, ALL_TRACES, ROLLING_EXPERIMENT_CONFIGS, ROLLING_EXPERIMENT_NAMES
 
-FEATURES = ["str_feature_1", "str_feature_2", "int_feature_1", "int_feature_2", "int_feature_3"]
+from src.pandora_trace.query_db import BENCHMARK_QUERIES, run_templates
 
+FEATURES = ["str_feature_1", "str_feature_2", "int_feature_1", "int_feature_2", "int_feature_3"]
 HOUR = 60 * 60 * 1000
 
 SAMPLE_SIZES = [5, 10, 15, 20, 30, 40, 50, 75, 100, 150]
@@ -669,92 +670,6 @@ def get_size(repetitions: int = 5):
     pprint.pprint(all_results)
 
 
-def iterate_template_parameters(query: str, parameters_values: OrderedDict[str, List[str]]):
-    def inner(partial_dict: dict, parameters_to_add: List[str]):
-        if not parameters_to_add:
-            yield partial_dict
-            return
-        name = parameters_to_add[0]
-        for value in parameters_values[name]:
-            yield from inner(partial_dict | {name: value}, parameters_to_add[1:])
-        # print("Done iterating values of", parameters_to_add, "when fixing", partial_dict)
-
-    query_parameters = {t[1] for t in Formatter().parse(query)}
-    query_parameters = [p for p in parameters_values if p in query_parameters]
-    return inner({}, query_parameters)
-
-
-BENCHMARK_QUERIES = [
-    ("Find traces of a service that having an error", """
-    SELECT S1.startTime / 3600 as f, COUNT(*) as c
-    FROM {table_name} as S1, {table_name} as S2
-    WHERE S1.serviceName = '{entry_point}'
-      AND S1.traceId = S2.traceId
-      AND S2.status = 1
-    GROUP BY S1.startTime / 3600;
-    """, ["crush", "packet_loss"]),
-    ("Find traces that have a particular attribute", """
-    SELECT S2.{attr_name} as f, COUNT(*) as c
-    FROM {table_name} as S1, {table_name} as S2
-    WHERE S1.serviceName = '{entry_point}'
-      AND S1.traceId = S2.traceId
-    GROUP BY S2.{attr_name};
-    """, ["crush", "packet_loss"]),
-    ("Discover architecture of the whole system", """
-     SELECT S1.startTime / 3600 as f, COUNT(*) as c
-    FROM {table_name} as S1, {table_name} as S2
-    Where S1.spanId = S2.parentId
-        AND S1.serviceName = '{service_name}'
-        AND S2.serviceName = '{service_name2}'
-    GROUP BY S1.startTime / 3600;
-    """, ["crush", "packet_loss"]),
-    ("Find bottlenecks", """
-    SELECT ROUND((S2.endTime - S2.startTime) / (S1.endTime - S1.startTime), 1) AS f, count(*) as c
-    FROM {table_name} as S1, {table_name} as S2
-    WHERE S1.serviceName = '{entry_point}'
-      AND S2.serviceName = '{service_name}'
-      AND S1.traceId = S2.traceId
-    GROUP BY f;
-    """, ["cpu_load", "disk_io_stress", "latency", "memory_stress"]),
-    ("RED metrics - rate", """
-    SELECT startTime / 3600 as f, COUNT(*) as c
-    FROM {table_name}
-    WHERE serviceName = '{service_name}'
-    GROUP BY startTime / 3600;
-    """, ["crush", "packet_loss", "cpu_load", "disk_io_stress", "latency", "memory_stress"]),
-    ("RED metrics - error", """
-    SELECT endTime - startTime as f, COUNT(*) as c
-    FROM {table_name}
-    WHERE serviceName = '{service_name}'
-        AND status = 1
-    GROUP BY endTime - startTime;
-    """, ["crush", "packet_loss", "cpu_load", "disk_io_stress", "latency", "memory_stress"]),
-    ("RED metrics - duration", """
-    SELECT endTime - startTime as f, COUNT(*) as c
-    FROM {table_name}
-    WHERE serviceName = '{service_name}'
-    GROUP BY endTime - startTime;
-    """, ["crush", "packet_loss", "cpu_load", "disk_io_stress", "latency", "memory_stress"]),
-    ("Frequency of an attribute", """
-    SELECT {attr_name} as f, count(*) as c
-    FROM {table_name}
-    GROUP BY {attr_name};
-    """, ["crush", "packet_loss", "cpu_load", "disk_io_stress", "latency", "memory_stress"]),
-    ("Max value of an attribute for every 5 minute window", """
-    SELECT startTime / 3600 as f, MAX({int_attr_name}) as c
-    FROM {table_name}
-    Where serviceName = '{service_name}'
-    GROUP BY startTime / 3600;
-    """, ["crush", "packet_loss"]),
-    ("Frequency of an attribute after filtering by another attribute", """
-    SELECT {attr_name} as f, count(*) as c
-    FROM {table_name}
-    Where serviceName = '{service_name}'
-    GROUP BY {attr_name};
-    """, ["crush", "packet_loss"]),
-]
-
-
 def get_wasserstein_distance(syn, real):
     syn["c"] = syn["c"] / syn["c"].sum()
     real["c"] = real["c"] / real["c"].sum()
@@ -764,35 +679,14 @@ def get_wasserstein_distance(syn, real):
     return scipy.stats.wasserstein_distance(syn["c"], real["c"])
 
 
-def run_templates(prefix: str = "DeathStar", queries=tuple(BENCHMARK_QUERIES), non_real: str = "Syn{prefix}Spans"):
-    parameters_values = OrderedDict(
+def get_parameters_values(prefix: str) -> OrderedDict[str, List[str]]:
+    return OrderedDict(
         entry_point=all_entry_points(table_prefix=prefix),
         service_name=all_services(table_prefix=prefix),
         service_name2=all_services(table_prefix=prefix),
         attr_name=FEATURES,
         int_attr_name=[f for f in FEATURES if f.startswith("int")],
     )
-
-    relevant_qs = [(name, query, relevant_incidents)
-                   for name, query, relevant_incidents in queries
-                   if any(inc in prefix for inc in relevant_incidents)]
-
-    avg_query = []
-    for query_name, query, relevant_incidents in relevant_qs:
-        avg_params = []
-        for index, params in enumerate(iterate_template_parameters(query, parameters_values)):
-            syn = pandas.read_sql_query(query.format(table_name=non_real.format(prefix=prefix), **params), conn)
-            real = pandas.read_sql_query(query.format(table_name=f"{prefix}Spans", **params), conn)
-            if len(syn) == 0 or len(real) == 0:
-                continue
-            distance = get_wasserstein_distance(syn, real)
-            if distance:
-                avg_params.append(distance)
-        if avg_params:
-            avg_query.append(numpy.average(avg_params))
-    if avg_query:
-        print(f'"{prefix}": {numpy.average(avg_query)},')
-    return avg_query
 
 
 def fill_benchmark(real_data_dir, syn_data_dir: str, desc: str, variant: int):
@@ -832,7 +726,7 @@ def benchmark_by_query(iterations: int = 3):
                     desc = str(desc).replace(".", "").replace('-', '_')
                     prefix = f"DeathStarExpLambda{desc}_{variant}"
                     try:
-                        run_templates(prefix, queries=[query])
+                        run_templates(conn, get_parameters_values(prefix), prefix, queries=[query])
                     except Exception as e:
                         if "no such table" in repr(e):
                             continue
@@ -886,7 +780,7 @@ def test_benchmark_sampling(exp_lambda: float = 0.001):
                     non_real = f"HeadBased{{prefix}}Spans{sampling}"
                     prefix = f"DeathStarExpLambda{desc}_{variant}"
                     try:
-                        run_templates(prefix, queries=[query], non_real=non_real)
+                        run_templates(conn, get_parameters_values(prefix), prefix, queries=[query], non_real=non_real)
                     except Exception as e:
                         if "no such table" in repr(e):
                             pass
@@ -951,7 +845,6 @@ if __name__ == '__main__':
     # spans_count()
     # get_size()
     # test_benchmark()
-    # run_templates()
     # benchmark_by_exp_lambda()
     # selected_specifics()
     # benchmark_by_query(iterations=1)
