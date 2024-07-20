@@ -127,17 +127,17 @@ def main(arg: Optional[str] = None) -> None:
 
 if __name__ == "__main__":
     iterations = 3
-    for desc in os.listdir("/Users/saart/cmu/GenT/traces"):
-        if desc == "wildryde":
-            continue
-        for i in range(iterations):
-            traces_dir = f"/Users/saart/cmu/GenT/traces/{desc}"
-            driver = GenTDriver(GenTConfig(chain_length=2, iterations=30, tx_end=10000 + i, traces_dir=traces_dir))
-            driver.train_and_generate()
-            fill_benchmark(real_data_dir=traces_dir, syn_data_dir=driver.get_generated_data_folder(), desc=desc, variant=i)
+    # for desc in os.listdir("/Users/saart/cmu/GenT/traces"):
+    #     if desc == "wildryde":
+    #         continue
+    #     for i in range(iterations):
+    #         traces_dir = f"/Users/saart/cmu/GenT/traces/{desc}"
+    #         driver = GenTDriver(GenTConfig(chain_length=2, iterations=30, tx_end=10000 + i, traces_dir=traces_dir))
+    #         driver.train_and_generate()
+    #         fill_benchmark(real_data_dir=traces_dir, syn_data_dir=driver.get_generated_data_folder(), desc=desc, variant=i)
     # driver = TabFormerDriver(GenTBaseConfig(chain_length=3, iterations=5))
     # measure_configuration(driver, skip_if_exists=False)
     # iterations_exp()
-    # chain_length()
+    chain_length()
     # ctgan_dim()
     # simple_ablations()

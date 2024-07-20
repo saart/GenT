@@ -12,6 +12,7 @@ This repository includes the source code, test cases, and supplementary data for
 - [Replicate Experiments from the Paper](#replicate-experiments-from-the-paper)
   - [Demo Application Experiments](#demo-application-experiments)
   - [PandoraTrace Benchmark](#pandoratrace-benchmark)
+  - [Scripts for Paper Reproduction](#scripts-for-paper-reproduction)
 - [Contributing](#contributing)
 - [License](#license)
 - [References](#references)
@@ -89,7 +90,7 @@ translate_jaeger_to_gent(from_dir=f"abs/path/to/otel/traces", to_dir=f"abs/targe
 
 # Initialize the driver and train the model
 driver = GenTDriver(GenTConfig(traces_dir="abs/target/path/to/gent/traces"))
-driver.train()  # note: it takes a while to train the model
+driver.train()  # note: it takes a while to train the model. Consider around 1 minute per 10,000 traces and 10 iterations in a machine with a single GPU.
 
 to_send = driver.get_model_gzip_file()  # returns the path to GenT model
 ```
@@ -99,7 +100,7 @@ from drivers.gent.gent_driver import GenTDriver
 
 driver = GenTDriver(GenTConfig(traces_dir="abs/target/path/to/gent/traces"))
 driver.load_model_gzip_file("path/to/GenT/model.zip")
-driver.generate()  # note: it takes a while to train the model
+driver.generate()  # note: it takes a while to train the model. Consider around 1 minute, as mentioned above.
 # the generated traces will be stored in the traces_dir
 ```
 As discussed in the paper, GenTConfig is highly configurable and offers different trade-offs to better fit the target application. Ensure you use the same parameters in both the compression and decompression processes.
@@ -188,6 +189,15 @@ Using this benchmark involves two main steps:
 #### Comparing Results
 
 The API function `run_template` takes a dictionary that maps attributes to values and a list of SQL queries parameterized by these attributes, additionally it takes the name of two SQL tables and a DB cursor. It formats the queries using the given attributes, runs the resulting queries on the input tables, and compares the queries results using the Wasserstein distance. It returns the average distance.
+
+
+## Scripts for Paper Reproduction
+
+1. All the traces that were used in the paper can be downloaded from https://gen-t-code.s3.us-west-2.amazonaws.com/traces.zip.
+2. The file `src/paper/ml_ops.py` executes the different ablation configurations used in the paper: `chain_length`, `ctgan_dim`, etc. 
+3. The file `src/paper/adaption_experiment.py` executes the simulation where the traces' properties have changed every batch.
+4. The file `src/fidelity/raw_sql.py` is used to calculate fidelity metrics using SQLite DB that holds synthetic and raw traces. The function `fill_data` fills the database with the raw/synthetic traces from the given directory. Functions like `trigger_correlation`, `monitor_errors`, `bottlenecks_by_time_range`, calculate a specific fidelity metric given syn/raw tables. Functions like `ctgan_gen_dim`, `rolling_experiment` are used to generate the final fidelity data for the figures in the paper.
+5. The file `src/paper/figures.py` generates the figures used in the paper, based on the output from the previous step. In the `main` function, comment in/out the desired figures to generate.
 
 
 ## Contributing
