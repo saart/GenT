@@ -15,7 +15,7 @@ EMPTY = "Unknown"
 @dataclass(frozen=True)
 class GenTBaseConfig:
     chain_length: int = 3
-    iterations: int = 1000
+    iterations: int = 100
     metadata_str_size: int = 2
     metadata_int_size: int = 3
     batch_size: int = 10

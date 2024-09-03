@@ -75,6 +75,37 @@ GenT/
     ```sh
     pip install -r src/requirements.txt
     ```
+   
+4. Install our modified version of CTGAN:
+    ```sh
+    pushd libs/CTGAN && pip install . && popd
+   ```
+   
+4. Add our source code to the Python path:
+    ```sh
+    export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+    ```
+   
+## Quick Start
+
+To help with a very quick start, this repo includes a small set of traces that were generated using the PandoraTrace Benchmark. The rest of the traces can be downloaded using the instructions below.
+
+To demonstrates the basic functionality of Gen-T, run the following script that generates synthetic traces from a set of Jaeger traces.
+
+```sh
+from drivers.gent.gent_driver import GenTDriver, GenTConfig
+from pandora_trace.jaeger_to_gent import translate_jaeger_to_gent
+import tempfile
+
+temp_dir = tempfile.mkdtemp()
+translate_jaeger_to_gent(from_dir=f"./src/pandora_trace/data/socialNetwork/packet_loss-0.2/raw_jaeger/", to_dir=temp_dir)
+driver = GenTDriver(GenTConfig(traces_dir=temp_dir))
+driver.train()
+print("Path to raw GenT compressed data:", driver.get_model_gzip_file())
+driver.generate()
+print("Path to generated traces:", driver.get_generated_data_folder())
+```
+
 
 ## Use in production
 

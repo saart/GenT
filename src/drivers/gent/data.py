@@ -88,6 +88,8 @@ def get_all_txs(tx_start: int, tx_end: int, traces_dir: str = TRACES_DIR) -> Lis
         with open(os.path.join(traces_dir, file), "r") as input_file:
             for json_line in input_file.readlines():
                 tx = json.loads(json_line.rstrip(',\n'))
+                if not tx["graph"]["edges"] or not all(e["target"] for e in tx["graph"]["edges"]):
+                    continue
                 set_gent_name(tx["nodesData"])
                 txs.append(tx)
     result = sorted(txs, key=lambda t: t["details"]["startTime"])[tx_start: tx_end]

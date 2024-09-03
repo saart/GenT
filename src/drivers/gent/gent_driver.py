@@ -80,7 +80,7 @@ class GenTDriver(BaseDriver):
             tar.extract(file, os.path.join(self.get_work_folder(), subdir))
         tar.close()
 
-    def train_and_generate(self) -> None:
+    def train(self) -> None:
         shutil.rmtree(self.get_work_folder(), ignore_errors=True)
         start = time.time()
         # train_and_save_start_time(self.gen_t_config, os.path.join(self.get_work_folder(), "start_time"))
@@ -96,6 +96,9 @@ class GenTDriver(BaseDriver):
             pool.close()
             pool.join()
         print(f"Training took {time.time() - start} seconds")
+
+    def train_and_generate(self) -> None:
+        self.train()
         self.generate()
 
     def generate(self, param: int = 0, from_downloaded: bool = False, suffix: str = '') -> None:
